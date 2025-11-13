@@ -13,7 +13,7 @@ from app.api.transactions import router as transactions_router
 from app.api.cards import router as cards_router
 from app.api.users import router as users_router
 from app.api.support import router as support_router
-from app.api import admin, auth
+from app.api import admin, auth, todos
 
 app = FastAPI(title="DiceBank API", version="1.0")
 
@@ -46,6 +46,7 @@ app.include_router(users_router)
 app.include_router(support_router)
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(todos.router)
 
 @app.get("/")
 def root():
