@@ -12,22 +12,34 @@ from app.models.account import Account
 from app.schemas.user import UserRegister, LoginSchema, UserResponse, UserStatusUpdate, UserRoleUpdate
 from app.utils.security import hash_password, verify_password
 from app.utils.cards import generate_unique_card_number
-from app.utils.session_manager import create_session, get_user_by_session, delete_session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer()
 
-
-def _create_session_token(db: Session, user_id: int) -> str:
-    return create_session(db, user_id)
-
-
-def _get_session_user(db: Session, token: str) -> User:
-    return get_user_by_session(db, token)
+SESSIONS: dict[str, dict] = {}
+SESSION_EXPIRE_HOURS = 24
 
 
-def _delete_session_token(db: Session, token: str):
-    delete_session(db, token)
+def _create_session_token(user_id: int) -> str:
+    """Create a new in-memory session token."""
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=SESSION_EXPIRE_HOURS)
+    SESSIONS[token] = {"user_id": user_id, "expires_at": expires_at}
+    return token
+
+
+def _get_session_user_id(token: str) -> Optional[int]:
+    """Retrieve the user ID from an active session token."""
+    data = SESSIONS.get(token)
+    if not data or data["expires_at"] < datetime.utcnow():
+        SESSIONS.pop(token, None)
+        return None
+    return data["user_id"]
+
+
+def _delete_session(token: str):
+    
+    SESSIONS.pop(token, None)
 
 
 
@@ -35,11 +47,19 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Security(security),
     db: Session = Depends(get_db),
 ) -> User:
+    
     if not credentials:
         raise HTTPException(status_code=401, detail="Missing authorization token")
 
     token = credentials.credentials
-    user = _get_session_user(db, token)
+    user_id = _get_session_user_id(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
     return user
 
 
@@ -102,7 +122,7 @@ def login(payload: LoginSchema, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated. Please contact support.")
 
-    token = _create_session_token(db, user.id)
+    token = _create_session_token(user.id)
     return {
         "session_token": token,
         "user": UserResponse.from_orm(user).dict()
@@ -110,10 +130,10 @@ def login(payload: LoginSchema, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-def logout(credentials: HTTPAuthorizationCredentials = Security(security), db: Session = Depends(get_db)):
+def logout(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Logout the current session."""
     token = credentials.credentials
-    _delete_session_token(db, token)
+    _delete_session(token)
     return {"message": "Logged out successfully"}
 
 
