@@ -1,10 +1,14 @@
 import secrets
+import os
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session as DBSession
 from fastapi import HTTPException, status
 from app.models.session import Session
 
-SESSION_EXPIRY_HOURS = 24
+try:
+    SESSION_EXPIRY_HOURS = int(os.getenv("SESSION_EXPIRY_HOURS", "24"))
+except ValueError:
+    SESSION_EXPIRY_HOURS = 24
 
 def create_session(db: DBSession, user_id: int) -> str:
     token = secrets.token_urlsafe(32)

@@ -18,9 +18,16 @@ from app.api import admin, auth
 app = FastAPI(title="DiceBank API", version="1.0")
 
 # CORS setup
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS")
+origins = [o.strip() for o in ALLOWED_ORIGINS.split(",") if o.strip()] if ALLOWED_ORIGINS else [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5175",
+    "http://localhost:5174",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5175", "http://localhost:5174"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,10 +38,13 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+RUN_DB_STARTUP = os.getenv("RUN_DB_STARTUP", "false").lower() in ("1", "true", "yes", "on")
+
 @app.on_event("startup")
 def on_startup():
-    create_db_and_tables()
-    migrate_schema()
+    if RUN_DB_STARTUP:
+        create_db_and_tables()
+        migrate_schema()
 
 # Routers
 app.include_router(auth_router)

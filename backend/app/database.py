@@ -1,8 +1,10 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+import os
 
-DATABASE_URL = "postgresql://postgres:1234@localhost:5432/dicebank"
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:1234@localhost:5432/dicebank")
+SQLALCHEMY_ECHO = os.getenv("SQLALCHEMY_ECHO", "false").lower() in ("1", "true", "yes", "on")
 
 
 
@@ -13,7 +15,7 @@ class Base(DeclarativeBase):
 
 engine = create_engine(
     DATABASE_URL,
-    echo=True,  
+    echo=SQLALCHEMY_ECHO,
 )
 
 
